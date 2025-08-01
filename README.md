@@ -299,4 +299,4 @@ If you encounter any issues or have questions:
 
 ---
 
-**Made with ❤️ for job seekers worldwide**
+**Made with Dasini Jayakody❤️ for job seekers worldwide**
