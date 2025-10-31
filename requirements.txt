@@ -1,5 +1,3 @@
-# Updated: relax pins, ensure compatible huggingface-hub, add setuptools & wheel to avoid distutils error
-
 # Build tools to satisfy pip build isolation on newer Python (fixes "No module named 'distutils'")
 setuptools>=68.0.0
 wheel

@@ -1,3 +1,15 @@
+"""
+frontend/app.py
+
+Streamlit frontend for CareerPathAI.
+
+High-level overview:
+- Renders UI pages: Upload Resume, Manual Skills Input, Sector Explorer, About.
+- Calls backend API endpoints via helper wrappers (upload_resume_api, analyze_skills_api, get_job_profiles_api).
+- Attempts to help start a local backend process (start_backend_subprocess) when backend is not reachable locally.
+- Uses environment variable API_BASE_URL so the frontend can point to a hosted backend (Streamlit Cloud).
+"""
+
 import streamlit as st
 import requests
 import json
@@ -103,12 +115,21 @@ st.markdown(
 
 # API configuration
 # Use environment variable so Streamlit Cloud (or any host) can point to a remote backend.
+# To test locally, set API_BASE_URL to "http://localhost:8000" or run the local backend.
 API_BASE_URL = os.environ.get("API_BASE_URL", "http://localhost:8000")
 
 
 # --- Revert API wrappers to original backend-only behavior ---
+# The following helper functions encapsulate communication with the backend.
+# Each wrapper returns JSON on success or None on error and displays helpful messages for support.
+
+
 def check_api_health():
-    """Check if the API is running"""
+    """Check if the API is running.
+    Returns:
+        bool: True if API health endpoint returns HTTP 200, False otherwise.
+    Used by main() to determine whether to show backend-start options.
+    """
     try:
         response = requests.get(f"{API_BASE_URL}/health", timeout=5)
         return response.status_code == 200
@@ -117,7 +138,14 @@ def check_api_health():
 
 
 def upload_resume_api(file):
-    """Upload resume to API (handles Streamlit UploadedFile)"""
+    """Upload resume file to backend endpoint /upload_resume.
+    Args:
+        file: Streamlit UploadedFile or file-like object.
+    Returns:
+        dict|None: parsed JSON response from backend or None on error.
+    Side effects:
+        Uses st.error to render user-friendly failure messages with backend details.
+    """
     try:
         # Prepare file tuple for requests: (filename, bytes, content_type)
         if hasattr(file, "getvalue"):
@@ -156,7 +184,14 @@ def upload_resume_api(file):
 
 
 def analyze_skills_api(skills_data):
-    """Analyze skills via API with improved error reporting"""
+    """Send skills data to backend /analyze_skills.
+    Args:
+        skills_data (dict): payload with skill categories.
+    Returns:
+        dict|None: backend JSON response or None on error.
+    Note:
+        Timeout is set to 30 seconds; catches connection errors and surfaces messages.
+    """
     try:
         resp = requests.post(
             f"{API_BASE_URL}/analyze_skills", json=skills_data, timeout=30
@@ -181,7 +216,11 @@ def analyze_skills_api(skills_data):
 
 
 def get_job_profiles_api():
-    """Fetch job profiles from API with improved error reporting"""
+    """Fetch job profiles from backend /job_profiles.
+    Returns:
+        dict|None: backend JSON containing job profiles or None on failure.
+    Shows helpful message if backend unreachable.
+    """
     try:
         resp = requests.get(f"{API_BASE_URL}/job_profiles", timeout=15)
         if resp.status_code == 200:
@@ -222,7 +261,9 @@ SECTORS = {
 
 
 def display_skill_analysis(skill_analysis: Dict):
-    """Display skill analysis metrics"""
+    """Render skill analysis metrics on the UI.
+    Expects a dict with keys: total_skills, skill_categories, strongest_category, skill_diversity_score.
+    """
     col1, col2, col3, col4 = st.columns(4)
 
     with col1:
@@ -241,7 +282,7 @@ def display_skill_analysis(skill_analysis: Dict):
 
 
 def display_recommendations(recommendations: List[Dict]):
-    """Display career recommendations"""
+    """Render the top career recommendations in a user-friendly card layout."""
     st.subheader("🎯 Career Recommendations")
 
     for i, rec in enumerate(recommendations[:5]):
@@ -268,7 +309,7 @@ def display_recommendations(recommendations: List[Dict]):
 
 
 def display_learning_plan(learning_plan: Dict):
-    """Display learning plan for missing skills"""
+    """Render learning resources for missing skills (courses, books, practice)."""
     if not learning_plan:
         return
 
@@ -295,7 +336,7 @@ def display_learning_plan(learning_plan: Dict):
 
 
 def display_personalized_advice(advice: Dict):
-    """Display personalized career advice"""
+    """Show personalized advice including next steps and market insights."""
     st.subheader("💡 Personalized Advice")
 
     st.markdown(f"**{advice.get('current_position', '')}**")
@@ -316,7 +357,9 @@ def display_personalized_advice(advice: Dict):
             st.markdown(f"• {gap}")
 
 
-# Replace direct plotly imports with safe import
+# Plotly optional import - explanation added
+# The app tries to use Plotly for rich charts; if Plotly import fails (e.g., not installed),
+# the app falls back to Streamlit built-in charts to avoid crashing.
 try:
     import plotly.express as px
     import plotly.graph_objects as go
@@ -327,11 +370,7 @@ except Exception:
 
 
 def _plot_bar(categories, counts, title, x_label="x", y_label="y", height=400):
-    """
-    Use plotly if available, otherwise fall back to st.bar_chart.
-    If plotly is available returns a Plotly figure; otherwise returns None
-    after directly rendering a Streamlit bar chart.
-    """
+    """Create a bar chart using Plotly when available or fallback to st.bar_chart."""
     if PLOTLY_AVAILABLE:
         fig = px.bar(
             x=categories,
@@ -351,7 +390,7 @@ def _plot_bar(categories, counts, title, x_label="x", y_label="y", height=400):
 
 
 def create_skill_chart(skills: Dict[str, List[str]]):
-    """Create a chart showing skill distribution"""
+    """Helper that builds a skill distribution chart from skills dict."""
     if not skills:
         return None
 
@@ -375,17 +414,23 @@ def create_skill_chart(skills: Dict[str, List[str]]):
 
 
 def get_default_backend_dir():
-    # Try to resolve the project app directory relative to this frontend file
+    """Return the expected backend directory relative to this frontend file.
+    This is used by start_backend_subprocess to attempt to run the backend locally.
+    """
     this_dir = os.path.dirname(__file__)
     candidate = os.path.normpath(os.path.join(this_dir, "..", "app"))
     return candidate
 
 
 def start_backend_subprocess(backend_dir=None, timeout=15):
-    """
-    Try to start the backend with uvicorn in a subprocess.
-    Returns (True, message) on success, (False, message) on failure.
-    Writes uvicorn stdout/stderr to a log file (backend_start.log) in the project root.
+    """Attempt to start the FastAPI backend using uvicorn in a detached subprocess.
+
+    Behavior:
+    - Detects uvicorn in PATH, otherwise uses python -m uvicorn.
+    - Writes stdout/stderr to backend_start.log for debugging.
+    - Polls local health endpoint until timeout.
+    Returns:
+        (bool, str): success flag and message (helpful for support when startup fails).
     """
     backend_dir = backend_dir or get_default_backend_dir()
     if not os.path.isdir(backend_dir):
@@ -467,6 +512,10 @@ def start_backend_subprocess(backend_dir=None, timeout=15):
 
 
 def main():
+    """Entry point for the Streamlit app.
+    - Checks backend health and offers a 'Start Backend Locally' button if unreachable.
+    - Renders sidebar navigation and dispatches to page functions.
+    """
     st.markdown('<h1 class="main-header">🚀 CareerPathAI</h1>', unsafe_allow_html=True)
     st.markdown(
         '<p style="text-align: center; font-size: 1.2rem; color: #666;">Multi-Sector AI-Powered Career Guidance System</p>',
@@ -517,6 +566,7 @@ def main():
 
 
 def upload_resume_page():
+    """Page that allows the user to upload a resume (PDF/DOCX) and triggers analysis."""
     st.markdown(
         '<h2 class="sub-header">📄 Upload Your Resume</h2>', unsafe_allow_html=True
     )
@@ -553,6 +603,7 @@ def upload_resume_page():
 
 
 def manual_skills_page():
+    """Page to manually pick or type skills when user doesn't have a resume to upload."""
     st.markdown(
         '<h2 class="sub-header">✍️ Manual Skills Input</h2>', unsafe_allow_html=True
     )
@@ -745,6 +796,7 @@ def manual_skills_page():
 
 
 def sector_explorer_page():
+    """Page to explore job profiles across supported sectors (data fetched from backend)."""
     st.markdown(
         '<h2 class="sub-header">🌍 Sector Explorer</h2>', unsafe_allow_html=True
     )
@@ -823,7 +875,11 @@ def sector_explorer_page():
 
 
 def display_results(data, selected_sectors):
-    """Display analysis results with sector filtering"""
+    """Render the combined analysis view (personal info, skills, recommendations, charts).
+    The function accepts the API response structure and adapts to two shapes:
+    - Response that includes 'parsed_resume' and 'career_analysis'
+    - A direct structure used for manual skills restructured to the same layout
+    """
 
     # Handle API response structure
     if "parsed_resume" in data:
@@ -1045,6 +1101,7 @@ def display_results(data, selected_sectors):
 
 
 def about_page():
+    """Simple 'About' page describing the project and supported sectors."""
     st.markdown(
         '<h2 class="sub-header">ℹ️ About CareerPathAI</h2>', unsafe_allow_html=True
     )

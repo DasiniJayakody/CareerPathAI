@@ -294,25 +294,5 @@ Notes:
 6. Push to the branch: `git push origin feature-name`
 7. Submit a pull request
 
-## 📝 License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## 🙏 Acknowledgments
-
-- spaCy for excellent NLP capabilities
-- Streamlit for the beautiful web interface
-- FastAPI for the robust backend framework
-- The open-source community for inspiration and tools
-
-## 📞 Support
-
-If you encounter any issues or have questions:
-
-1. Check the existing issues
-2. Create a new issue with detailed information
-3. Contact the maintainers
-
----
 
 **Made with ❤️ by Dasini Jayakody for job seekers worldwide**
