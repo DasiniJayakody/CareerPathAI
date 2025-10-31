@@ -102,7 +102,8 @@ st.markdown(
 )
 
 # API configuration
-API_BASE_URL = "http://localhost:8000"
+# Use environment variable so Streamlit Cloud (or any host) can point to a remote backend.
+API_BASE_URL = os.environ.get("API_BASE_URL", "http://localhost:8000")
 
 
 # --- Revert API wrappers to original backend-only behavior ---

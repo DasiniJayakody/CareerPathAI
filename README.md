@@ -268,6 +268,22 @@ COPY app/ .
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
 ```
 
+## 🚀 Streamlit Cloud Deployment
+
+1. Push this repository to a GitHub repo.
+2. Go to https://share.streamlit.io and connect your GitHub account.
+3. Add an app with the following settings:
+   - Repository: your-repo
+   - Main file path: streamlit_app.py
+4. (Optional) Set the environment variable API_BASE_URL in Streamlit Cloud to your hosted backend (e.g. https://my-backend.example.com). If not set, the app will attempt to use http://localhost:8000 (useful for local development).
+5. Ensure the repository has the requirements.txt at the root (already present).
+6. Deploy — Streamlit Cloud will install dependencies and run streamlit_app.py automatically.
+
+Notes:
+
+- If you host the FastAPI backend separately, point API_BASE_URL in the Streamlit Cloud app settings to that backend URL.
+- If you want both frontend and backend in the same deployment, consider deploying the backend to a separate service (Heroku/Railway/GCP/AWS) and set API_BASE_URL accordingly.
+
 ## 🤝 Contributing
 
 1. Fork the repository
